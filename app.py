@@ -17,7 +17,7 @@ st.write("Machine Learning Based Traffic Analysis Dashboard")
 st.divider()
 
 # Load processed dataset
-data_path = "data/processed_traffic.csv"
+data_path = "processed_traffic.csv"
 
 if not os.path.exists(data_path):
     st.error("Processed dataset not found. Please add data/processed_traffic.csv.")
