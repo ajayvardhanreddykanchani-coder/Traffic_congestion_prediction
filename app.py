@@ -13,50 +13,72 @@ st.set_page_config(
 
 st.title("🚦 Traffic Congestion Prediction System")
 st.write("Machine Learning Based Traffic Analysis Dashboard")
-
 st.divider()
 
-# Load processed dataset
-data_path = "processed_traffic.csv"
+# ============================================================
+# DATASET PATH
+# Your GitHub screenshot shows processed_traffic.csv in the
+# MAIN REPOSITORY FOLDER, not inside a data/ folder.
+# ============================================================
+data_path = "processed_traffic.csv"  # <-- DATASET PATH
 
 if not os.path.exists(data_path):
-    st.error("Processed dataset not found. Please add data/processed_traffic.csv.")
+    st.error(
+        "Processed dataset not found. Upload processed_traffic.csv "
+        "to the same folder as app.py in your GitHub repository."
+    )
     st.stop()
 
 data = pd.read_csv(data_path)
 
-# Find saved models
-model_files = glob.glob("models/*.pkl")
+# ============================================================
+# MODEL PATH
+# Your GitHub screenshot shows .pkl files in the MAIN REPOSITORY
+# FOLDER, not inside models/. Search there first, then models/.
+# ============================================================
+model_files = glob.glob("*.pkl") + glob.glob("models/*.pkl")  # <-- MODEL SEARCH PATH
+model_files = sorted(set(model_files))
 
 if not model_files:
-    st.error("No trained models found in the models folder.")
-    st.info("Run your model-training module and save the trained models first.")
+    st.error(
+        "No trained .pkl models found. Upload a model file such as "
+        "random_forest_compressed.pkl beside app.py, or inside models/."
+    )
     st.stop()
 
-model_names = [os.path.basename(f) for f in model_files]
+# Display short names in the dropdown while keeping full paths for loading
+model_names = {os.path.basename(path): path for path in model_files}
 
 st.sidebar.header("Dashboard Menu")
-selected_model = st.sidebar.selectbox(
+selected_model_name = st.sidebar.selectbox(
     "Choose Machine Learning Model",
-    model_names
+    list(model_names.keys())
 )
 
-model_path = os.path.join("models", selected_model)
+model_path = model_names[selected_model_name]  # <-- EXACT SELECTED MODEL PATH
 saved = joblib.load(model_path)
 
-model = saved["model"]
-features = saved["features"]
+# Support either the expected dictionary format or a directly saved model
+if isinstance(saved, dict) and "model" in saved and "features" in saved:
+    model = saved["model"]
+    features = saved["features"]
+else:
+    model = saved
+    st.error(
+        "The selected model file does not contain the expected "
+        "{'model': ..., 'features': ...} dictionary. Please save it "
+        "in that format from the training notebook."
+    )
+    st.stop()
 
 st.subheader("📊 Dataset Overview")
 
 c1, c2, c3 = st.columns(3)
-
 c1.metric("Total Records", f"{len(data):,}")
 c2.metric("Input Features", len(features))
 c3.metric("Available Models", len(model_files))
 
 st.subheader("🛣️ Traffic Prediction")
-
 st.write("Enter the traffic conditions below.")
 
 with st.form("prediction_form"):
@@ -75,9 +97,9 @@ with st.form("prediction_form"):
         clouds = st.slider("Cloud Coverage (%)", 0, 100, 40)
 
     weather_cols = [
-        f.replace("weather_main_", "")
-        for f in features
-        if f.startswith("weather_main_")
+        feature.replace("weather_main_", "")
+        for feature in features
+        if feature.startswith("weather_main_")
     ]
 
     weather = st.selectbox(
@@ -97,7 +119,7 @@ if predict_button:
         else:
             row[feature] = 0.0
 
-    # Set user-entered conditions
+    # Set user-entered conditions only for features the model expects
     values = {
         "hour": hour,
         "day": day,
@@ -113,13 +135,19 @@ if predict_button:
         if feature in row:
             row[feature] = value
 
-    # Reset weather indicators
+    # Set one-hot encoded weather indicators
     for feature in features:
         if feature.startswith("weather_main_"):
             row[feature] = 1.0 if feature == f"weather_main_{weather}" else 0.0
 
     input_data = pd.DataFrame([row], columns=features)
-    prediction = float(model.predict(input_data)[0])
+
+    try:
+        prediction = float(model.predict(input_data)[0])
+    except Exception as exc:
+        st.error(f"Prediction failed: {exc}")
+        st.stop()
+
     prediction = max(0, prediction)
 
     if prediction < 1000:
@@ -142,16 +170,13 @@ if predict_button:
     )
 
 st.divider()
-
 st.subheader("📈 Model Performance")
 
 metrics_file = "model_metrics.csv"
-
 if os.path.exists(metrics_file):
     metrics = pd.read_csv(metrics_file)
     st.dataframe(metrics, use_container_width=True)
 
 st.subheader("🔍 Dataset Preview")
 st.dataframe(data.head(10), use_container_width=True)
-
 st.caption("Traffic Congestion Prediction | Machine Learning Project")
